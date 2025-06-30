@@ -1,10 +1,10 @@
 package vehiclecompare
 
 import (
-	"vehicle-comparison/internal/models"
-	"vehicle-comparison/internal/preprocessor"
-	"vehicle-comparison/internal/extractor"
-	"vehicle-comparison/internal/comparator"
+	"github.com/choff5507/vehicle-image-comparison/internal/models"
+	"github.com/choff5507/vehicle-image-comparison/internal/preprocessor"
+	"github.com/choff5507/vehicle-image-comparison/internal/extractor"
+	"github.com/choff5507/vehicle-image-comparison/internal/comparator"
 	"gocv.io/x/gocv"
 	"encoding/base64"
 	"fmt"

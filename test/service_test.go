@@ -1,7 +1,7 @@
 package test
 
 import (
-	"vehicle-comparison/pkg/vehiclecompare"
+	"github.com/choff5507/vehicle-image-comparison/pkg/vehiclecompare"
 	"testing"
 	"os"
 	"path/filepath"

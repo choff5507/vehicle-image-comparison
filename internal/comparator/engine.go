@@ -1,7 +1,7 @@
 package comparator
 
 import (
-	"vehicle-comparison/internal/models"
+	"github.com/choff5507/vehicle-image-comparison/internal/models"
 	"fmt"
 	"math"
 )
@@ -353,7 +353,8 @@ func (ce *ComparisonEngine) compareBumperFeatures(bumper1, bumper2 models.Bumper
 	// Compare license plate area
 	plateAreaSimilarity := ce.comparePlateAreas(bumper1.LicensePlateArea, bumper2.LicensePlateArea)
 	
-	return (contourSimilarity*0.3 + textureSimilarity*0.3 + mountingSimilarity*0.2 + plateAreaSimilarity*0.2)
+	result := (contourSimilarity*0.3 + textureSimilarity*0.3 + mountingSimilarity*0.2 + plateAreaSimilarity*0.2)
+	return safeFloat64(result, 0.5)
 }
 
 func (ce *ComparisonEngine) compareContours(contour1, contour2 []models.Point2D) float64 {
@@ -389,7 +390,8 @@ func (ce *ComparisonEngine) compareContours(contour1, contour2 []models.Point2D)
 	}
 	
 	avgDistance := totalDistance / float64(matchCount)
-	return math.Exp(-avgDistance / 15.0)
+	result := math.Exp(-avgDistance / 15.0)
+	return safeFloat64(result, 0.5)
 }
 
 func (ce *ComparisonEngine) comparePlateAreas(area1, area2 models.Bounds) float64 {
@@ -405,9 +407,13 @@ func (ce *ComparisonEngine) comparePlateAreas(area1, area2 models.Bounds) float6
 	// Compare size
 	area1Size := float64(area1.Width * area1.Height)
 	area2Size := float64(area2.Width * area2.Height)
-	sizeSim := 1.0 - math.Abs(area1Size-area2Size)/math.Max(area1Size, area2Size)
+	sizeSim := 0.5 // Default
+	if maxArea := math.Max(area1Size, area2Size); maxArea > 0 {
+		sizeSim = 1.0 - math.Abs(area1Size-area2Size)/maxArea
+	}
 	
-	return (positionSim*0.6 + sizeSim*0.4)
+	result := (positionSim*0.6 + sizeSim*0.4)
+	return safeFloat64(result, 0.5)
 }
 
 func (ce *ComparisonEngine) compareDaylightFeatures(day1, day2 models.DaylightFeatures) float64 {
@@ -423,7 +429,8 @@ func (ce *ComparisonEngine) compareDaylightFeatures(day1, day2 models.DaylightFe
 	// Compare surface texture
 	textureSimilarity := ce.compareTextureSignatures(day1.SurfaceTexture, day2.SurfaceTexture)
 	
-	return (colorSimilarity*0.4 + badgeSimilarity*0.2 + trimSimilarity*0.2 + textureSimilarity*0.2)
+	result := (colorSimilarity*0.4 + badgeSimilarity*0.2 + trimSimilarity*0.2 + textureSimilarity*0.2)
+	return safeFloat64(result, 0.5)
 }
 
 func (ce *ComparisonEngine) compareInfraredFeatures(ir1, ir2 models.InfraredFeatures) float64 {
@@ -445,7 +452,8 @@ func (ce *ComparisonEngine) compareInfraredFeatures(ir1, ir2 models.InfraredFeat
 	// Compare material signatures
 	materialSimilarity := ce.compareSignatures(ir1.MaterialSignature, ir2.MaterialSignature)
 	
-	return (thermalSimilarity*0.3 + reflectiveSimilarity*0.3 + heatSimilarity*0.2 + materialSimilarity*0.2)
+	result := (thermalSimilarity*0.3 + reflectiveSimilarity*0.3 + heatSimilarity*0.2 + materialSimilarity*0.2)
+	return safeFloat64(result, 0.5)
 }
 
 // Placeholder methods for missing feature comparisons

@@ -1,4 +1,4 @@
-module vehicle-comparison
+module github.com/choff5507/vehicle-image-comparison
 
 go 1.21
 
