@@ -49,3 +49,22 @@ type Bounds struct {
 type Point2D struct {
 	X, Y float64
 }
+
+// LicensePlateRegion represents a detected license plate area
+type LicensePlateRegion struct {
+	Bounds        Bounds  `json:"bounds"`
+	Confidence    float64 `json:"confidence"`
+	AvgBrightness float64 `json:"avg_brightness"`
+	IsReflective  bool    `json:"is_reflective"`
+}
+
+// IRSignature represents the infrared signature around a license plate
+type IRSignature struct {
+	PlateRegion          LicensePlateRegion `json:"plate_region"`
+	SurroundingRegion    Bounds            `json:"surrounding_region"`
+	ReflectivityMap      [][]float64       `json:"reflectivity_map"`
+	MaterialSignature    []float64         `json:"material_signature"`
+	IlluminationGradient []float64         `json:"illumination_gradient"`
+	ShadowPatterns       []Point2D         `json:"shadow_patterns"`
+	TextureFeatures      []float64         `json:"texture_features"`
+}

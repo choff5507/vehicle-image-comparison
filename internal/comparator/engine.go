@@ -427,6 +427,12 @@ func (ce *ComparisonEngine) compareDaylightFeatures(day1, day2 models.DaylightFe
 }
 
 func (ce *ComparisonEngine) compareInfraredFeatures(ir1, ir2 models.InfraredFeatures) float64 {
+	// If both have IR signatures, use them for comparison
+	if ir1.IRSignature != nil && ir2.IRSignature != nil {
+		return ce.compareIRSignatures(*ir1.IRSignature, *ir2.IRSignature)
+	}
+	
+	// Fallback to basic thermal comparison
 	// Compare thermal signatures
 	thermalSimilarity := ce.compareSignatures(ir1.ThermalSignature, ir2.ThermalSignature)
 	
@@ -503,6 +509,112 @@ func (ce *ComparisonEngine) compareReflectiveElements(elements1, elements2 []mod
 
 func (ce *ComparisonEngine) compareHeatPatterns(patterns1, patterns2 []models.HeatPattern) float64 {
 	return 0.5 // Placeholder implementation
+}
+
+// compareIRSignatures compares IR signatures around license plates
+func (ce *ComparisonEngine) compareIRSignatures(sig1, sig2 models.IRSignature) float64 {
+	// Compare different components of the IR signature
+	reflectivitySimilarity := ce.compareReflectivityMaps(sig1.ReflectivityMap, sig2.ReflectivityMap)
+	materialSimilarity := ce.compareSignatures(sig1.MaterialSignature, sig2.MaterialSignature)
+	illuminationSimilarity := ce.compareSignatures(sig1.IlluminationGradient, sig2.IlluminationGradient)
+	shadowSimilarity := ce.compareShadowPatterns(sig1.ShadowPatterns, sig2.ShadowPatterns)
+	textureSimilarity := ce.compareSignatures(sig1.TextureFeatures, sig2.TextureFeatures)
+	
+	// Weight the different components
+	// Reflectivity map and material signature are most important for distinguishing vehicles
+	// Shadow patterns and illumination gradients help with 3D structure
+	// Texture provides additional discriminative power
+	result := (reflectivitySimilarity*0.35 + 
+			  materialSimilarity*0.30 + 
+			  shadowSimilarity*0.15 + 
+			  illuminationSimilarity*0.10 + 
+			  textureSimilarity*0.10)
+	
+	return safeFloat64(result, 0.5)
+}
+
+func (ce *ComparisonEngine) compareReflectivityMaps(map1, map2 [][]float64) float64 {
+	if len(map1) == 0 && len(map2) == 0 {
+		return 1.0
+	}
+	
+	if len(map1) == 0 || len(map2) == 0 {
+		return 0.0
+	}
+	
+	// Ensure maps are same size
+	if len(map1) != len(map2) {
+		return 0.0
+	}
+	
+	var totalDifference float64
+	var cellCount int
+	
+	for i := 0; i < len(map1); i++ {
+		if len(map1[i]) != len(map2[i]) {
+			continue
+		}
+		
+		for j := 0; j < len(map1[i]); j++ {
+			// Calculate absolute difference between reflectivity values
+			diff := math.Abs(map1[i][j] - map2[i][j])
+			totalDifference += diff
+			cellCount++
+		}
+	}
+	
+	if cellCount == 0 {
+		return 0.0
+	}
+	
+	// Convert average difference to similarity (lower difference = higher similarity)
+	avgDifference := totalDifference / float64(cellCount)
+	similarity := 1.0 - avgDifference
+	
+	return safeFloat64(similarity, 0.5)
+}
+
+func (ce *ComparisonEngine) compareShadowPatterns(shadows1, shadows2 []models.Point2D) float64 {
+	if len(shadows1) == 0 && len(shadows2) == 0 {
+		return 1.0
+	}
+	
+	if len(shadows1) == 0 || len(shadows2) == 0 {
+		return 0.0
+	}
+	
+	// Find best matching between shadow points
+	totalSimilarity := 0.0
+	matchCount := 0
+	
+	for _, s1 := range shadows1 {
+		bestSimilarity := 0.0
+		for _, s2 := range shadows2 {
+			// Calculate distance between shadow points
+			distance := math.Sqrt(math.Pow(s1.X-s2.X, 2) + math.Pow(s1.Y-s2.Y, 2))
+			
+			// Convert distance to similarity (closer = more similar)
+			similarity := math.Exp(-distance / 50.0) // 50 pixel tolerance
+			if similarity > bestSimilarity {
+				bestSimilarity = similarity
+			}
+		}
+		
+		if bestSimilarity > 0.3 { // Minimum threshold for matching
+			totalSimilarity += bestSimilarity
+			matchCount++
+		}
+	}
+	
+	if matchCount == 0 {
+		return 0.0
+	}
+	
+	// Normalize by the number of shadows in the smaller set
+	minShadows := math.Min(float64(len(shadows1)), float64(len(shadows2)))
+	normalizedSimilarity := totalSimilarity / minShadows
+	
+	return safeFloat64(normalizedSimilarity, 0.5)
 }
 
 func (ce *ComparisonEngine) calculateWeightedSimilarity(scores models.DetailedScores, lighting models.LightingType) float64 {

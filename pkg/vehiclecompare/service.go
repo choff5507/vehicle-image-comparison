@@ -16,6 +16,7 @@ type VehicleComparisonService struct {
 	viewLightingClassifier *preprocessor.ViewLightingClassifier
 	geometricExtractor     *extractor.GeometricExtractor
 	lightPatternExtractor  *extractor.LightPatternExtractor
+	irSignatureExtractor   *extractor.IRSignatureExtractor
 	comparisonEngine       *comparator.ComparisonEngine
 }
 
@@ -25,6 +26,7 @@ func NewVehicleComparisonService() *VehicleComparisonService {
 		viewLightingClassifier: preprocessor.NewViewLightingClassifier(),
 		geometricExtractor:     extractor.NewGeometricExtractor(),
 		lightPatternExtractor:  extractor.NewLightPatternExtractor(),
+		irSignatureExtractor:   extractor.NewIRSignatureExtractor(),
 		comparisonEngine:       comparator.NewComparisonEngine(),
 	}
 }
@@ -266,12 +268,24 @@ func (vcs *VehicleComparisonService) extractDaylightFeatures(img gocv.Mat) *mode
 }
 
 func (vcs *VehicleComparisonService) extractInfraredFeatures(img gocv.Mat) *models.InfraredFeatures {
-	// Simplified infrared feature extraction
+	// Extract real IR signature around license plate
+	irSignature, err := vcs.irSignatureExtractor.ExtractIRSignature(img)
+	if err != nil {
+		// Fallback to simplified features if IR signature extraction fails
+		return &models.InfraredFeatures{
+			ThermalSignature:   []float64{0.3, 0.7, 0.5},
+			ReflectiveElements: []models.ReflectiveElement{},
+			HeatPatterns:       []models.HeatPattern{},
+			MaterialSignature:  []float64{0.6, 0.4, 0.8},
+		}
+	}
+	
 	return &models.InfraredFeatures{
-		ThermalSignature:   []float64{0.3, 0.7, 0.5},
-		ReflectiveElements: []models.ReflectiveElement{},
-		HeatPatterns:       []models.HeatPattern{},
-		MaterialSignature:  []float64{0.6, 0.4, 0.8},
+		ThermalSignature:   irSignature.MaterialSignature, // Use material signature as thermal
+		ReflectiveElements: []models.ReflectiveElement{},   // Could be populated from shadow patterns
+		HeatPatterns:       []models.HeatPattern{},         // Not used in current implementation
+		MaterialSignature:  irSignature.MaterialSignature,
+		IRSignature:        irSignature,
 	}
 }
 
