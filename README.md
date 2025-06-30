@@ -12,28 +12,87 @@ A Go library for comparing vehicle images to detect license plate fraud using ad
 
 ## Installation
 
+### As a Library in Your Go Project
+
+1. **Add to your project:**
 ```bash
 go get github.com/choff5507/vehicle-image-comparison
 ```
 
+2. **Import in your Go code:**
+```go
+import "github.com/choff5507/vehicle-image-comparison/pkg/vehiclecompare"
+```
+
+3. **Use the API:**
+```go
+service := vehiclecompare.NewVehicleComparisonService()
+result, err := service.CompareVehicleImages("image1.jpg", "image2.jpg")
+```
+
+### Standalone Installation
+
+```bash
+# Clone and build
+git clone https://github.com/choff5507/vehicle-image-comparison.git
+cd vehicle-image-comparison
+go build -o vehicle-compare cmd/main.go
+```
+
 ## Requirements
 
-- Go 1.21+
-- OpenCV 4.x (via gocv)
+- **Go 1.21+**
+- **OpenCV 4.x** (via gocv)
+- **Minimum 8GB RAM** recommended for image processing
+- **Intel/AMD64 or ARM64** processor
 
 ### Installing OpenCV
 
+**macOS:**
 ```bash
-# macOS
 brew install opencv
-
-# Ubuntu/Debian  
-sudo apt-get install libopencv-dev
-
-# See gocv documentation for other platforms
 ```
 
-## Quick Start
+**Ubuntu/Debian:**
+```bash
+sudo apt-get update
+sudo apt-get install libopencv-dev pkg-config
+```
+
+**CentOS/RHEL:**
+```bash
+sudo yum install opencv-devel pkgconfig
+```
+
+**Windows:**
+- Download OpenCV from https://opencv.org/releases/
+- Follow gocv installation guide: https://gocv.io/getting-started/windows/
+
+**Verify OpenCV Installation:**
+```bash
+pkg-config --modversion opencv4
+# Should output version like: 4.8.0
+```
+
+## Integration Guide
+
+### Step 1: Add to Your Project
+
+Create a new Go module or add to existing project:
+
+```bash
+# New project
+mkdir my-vehicle-app
+cd my-vehicle-app
+go mod init my-vehicle-app
+
+# Add the library
+go get github.com/choff5507/vehicle-image-comparison
+```
+
+### Step 2: Basic Integration
+
+Create `main.go`:
 
 ```go
 package main
@@ -45,7 +104,7 @@ import (
 )
 
 func main() {
-    // Create service
+    // Create service (initialize once, reuse across requests)
     service := vehiclecompare.NewVehicleComparisonService()
     
     // Compare two vehicle images
@@ -57,9 +116,121 @@ func main() {
     // Check results
     fmt.Printf("Same vehicle: %v\n", result.IsSameVehicle)
     fmt.Printf("Similarity: %.3f\n", result.SimilarityScore)
-    fmt.Printf("Confidence: %v\n", result.ConfidenceLevel)
+    fmt.Printf("Processing time: %dms\n", result.ProcessingInfo.ProcessingTimeMs)
 }
 ```
+
+### Step 3: Advanced Integration
+
+For production applications:
+
+```go
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "log"
+    "net/http"
+    "github.com/choff5507/vehicle-image-comparison/pkg/vehiclecompare"
+    "github.com/choff5507/vehicle-image-comparison/internal/models"
+)
+
+type VehicleComparisonAPI struct {
+    service *vehiclecompare.VehicleComparisonService
+}
+
+func NewAPI() *VehicleComparisonAPI {
+    return &VehicleComparisonAPI{
+        service: vehiclecompare.NewVehicleComparisonService(),
+    }
+}
+
+// HTTP handler for vehicle comparison
+func (api *VehicleComparisonAPI) compareHandler(w http.ResponseWriter, r *http.Request) {
+    if r.Method != http.MethodPost {
+        http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+        return
+    }
+
+    var request struct {
+        Image1Base64 string `json:"image1_base64"`
+        Image2Base64 string `json:"image2_base64"`
+    }
+
+    if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+        http.Error(w, "Invalid JSON", http.StatusBadRequest)
+        return
+    }
+
+    // Perform comparison
+    result, err := api.service.CompareVehicleImagesFromBase64(
+        request.Image1Base64, 
+        request.Image2Base64,
+    )
+    if err != nil {
+        http.Error(w, fmt.Sprintf("Comparison failed: %v", err), http.StatusInternalServerError)
+        return
+    }
+
+    // Return results
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(result)
+}
+
+// Fraud detection wrapper
+func (api *VehicleComparisonAPI) DetectFraud(image1Path, image2Path string) (bool, float64, error) {
+    result, err := api.service.CompareVehicleImages(image1Path, image2Path)
+    if err != nil {
+        return false, 0, err
+    }
+
+    // Consider it fraud if:
+    // 1. Not same vehicle with high confidence
+    // 2. Same view and lighting (rules out different perspectives)
+    isFraud := !result.IsSameVehicle && 
+               result.ConfidenceLevel == models.ConfidenceHigh &&
+               result.ProcessingInfo.ViewConsistency &&
+               result.ProcessingInfo.LightingConsistency
+
+    return isFraud, result.SimilarityScore, nil
+}
+
+func main() {
+    api := NewAPI()
+
+    // Register HTTP handler
+    http.HandleFunc("/compare", api.compareHandler)
+    
+    // Example fraud detection
+    isFraud, similarity, err := api.DetectFraud("original.jpg", "suspect.jpg")
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    if isFraud {
+        fmt.Printf("🚨 FRAUD DETECTED! Similarity: %.3f\n", similarity)
+    } else {
+        fmt.Printf("✅ No fraud detected. Similarity: %.3f\n", similarity)
+    }
+
+    // Start server
+    fmt.Println("Vehicle comparison API running on :8080")
+    log.Fatal(http.ListenAndServe(":8080", nil))
+}
+```
+
+### Step 4: Build and Run
+
+```bash
+# Build your application
+go build -o my-vehicle-app
+
+# Run
+./my-vehicle-app
+```
+
+## Quick Start Examples
 
 ## API Usage
 
@@ -162,10 +333,22 @@ The system's breakthrough feature analyzes infrared reflectivity patterns around
 
 ## Performance
 
-- **Processing Time**: 300-400ms per comparison
+- **Processing Time**: 300-600ms per comparison (depends on resolution)
 - **Accuracy**: 86%+ similarity for identical vehicles
-- **Memory Efficient**: Proper resource cleanup
+- **Memory Efficient**: Proper resource cleanup with defer statements
 - **Robust**: Handles various image qualities and lighting conditions
+- **Optimal Resolution**: 1280x960 to 2048x1568 for best accuracy/speed balance
+
+### Resolution Guidelines
+
+| Resolution | License Plate Size | Performance | Accuracy | Recommendation |
+|------------|-------------------|-------------|----------|----------------|
+| 640x480    | 40-60px width    | Very Fast   | Basic    | Minimum viable |
+| 1280x960   | 80-120px width   | Fast        | Good     | **Recommended** |
+| 2048x1568  | 120-200px width  | Moderate    | Excellent| High accuracy use cases |
+| 4096x3072  | 240-400px width  | Slow        | Excellent| Overkill for most cases |
+
+**Best Practice**: Use 1280x960 for real-time applications, 2048x1568 for forensic analysis.
 
 ## Error Handling
 
@@ -193,6 +376,98 @@ go test ./...
 
 # Run with integration tests (requires test images)
 go test -v ./test/
+
+# Test your integration
+go run example/main.go path/to/image1.jpg path/to/image2.jpg
+```
+
+## Troubleshooting Integration
+
+### Common Issues
+
+**1. OpenCV not found:**
+```
+# Error: pkg-config: No package 'opencv4' found
+# Solution: Install OpenCV development libraries
+brew install opencv          # macOS
+sudo apt install libopencv-dev  # Ubuntu
+```
+
+**2. CGO compilation errors:**
+```bash
+# Error: C compiler cannot create executables
+# Solution: Install build tools
+xcode-select --install       # macOS
+sudo apt install build-essential  # Ubuntu
+```
+
+**3. Module import errors:**
+```go
+// Error: cannot find module
+// Solution: Ensure correct import path
+import "github.com/choff5507/vehicle-image-comparison/pkg/vehiclecompare"
+
+// NOT: import "vehicle-image-comparison/pkg/vehiclecompare"
+```
+
+**4. Memory issues with large images:**
+```go
+// Solution: Check image resolution and available RAM
+if result.ProcessingInfo.ProcessingTimeMs > 1000 {
+    log.Printf("Slow processing detected - consider resizing images")
+}
+```
+
+### Performance Optimization
+
+```go
+// For high-throughput applications, reuse the service
+var globalService = vehiclecompare.NewVehicleComparisonService()
+
+func compareImages(img1, img2 string) (*models.ComparisonResult, error) {
+    return globalService.CompareVehicleImages(img1, img2)
+}
+
+// Process multiple comparisons concurrently
+func compareBatch(pairs [][2]string) []Result {
+    results := make([]Result, len(pairs))
+    var wg sync.WaitGroup
+    
+    for i, pair := range pairs {
+        wg.Add(1)
+        go func(index int, images [2]string) {
+            defer wg.Done()
+            result, err := compareImages(images[0], images[1])
+            results[index] = Result{result, err}
+        }(i, pair)
+    }
+    
+    wg.Wait()
+    return results
+}
+```
+
+### Docker Integration
+
+Create `Dockerfile`:
+```dockerfile
+FROM golang:1.21-bullseye
+
+# Install OpenCV
+RUN apt-get update && apt-get install -y \
+    libopencv-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN go build -o vehicle-app main.go
+
+EXPOSE 8080
+CMD ["./vehicle-app"]
 ```
 
 ## License
