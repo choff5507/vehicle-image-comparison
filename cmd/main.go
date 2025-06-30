@@ -1,8 +1,8 @@
 package main
 
 import (
-	"vehicle-comparison/pkg/vehiclecompare"
-	"vehicle-comparison/internal/models"
+	"github.com/choff5507/vehicle-image-comparison/pkg/vehiclecompare"
+	"github.com/choff5507/vehicle-image-comparison/internal/models"
 	"encoding/json"
 	"flag"
 	"fmt"

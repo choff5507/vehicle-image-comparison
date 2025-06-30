@@ -102,6 +102,7 @@ type InfraredFeatures struct {
 	ReflectiveElements []ReflectiveElement `json:"reflective_elements"`
 	HeatPatterns       []HeatPattern      `json:"heat_patterns"`
 	MaterialSignature  []float64          `json:"material_signature"`
+	IRSignature        *IRSignature       `json:"ir_signature,omitempty"`
 }
 
 // Supporting types for features

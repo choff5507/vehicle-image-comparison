@@ -1,7 +1,7 @@
 package preprocessor
 
 import (
-	"vehicle-comparison/internal/models"
+	"github.com/choff5507/vehicle-image-comparison/internal/models"
 	"gocv.io/x/gocv"
 	"image"
 	"math"
